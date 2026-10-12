@@ -220,3 +220,7 @@ __marimo__/
 .claude
 .python-version
 wandb/
+
+# PyTorch model checkpoints
+.pth
+ckpt/
