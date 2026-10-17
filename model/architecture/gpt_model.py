@@ -2,6 +2,7 @@ from torch import nn
 import torch
 from typing import Dict
 from .transformer_block import TransformerBlock
+from .layer_norm import LayerNorm
 from .model_config import cfg_124m
 
 class GPTModel(nn.Module):
@@ -17,72 +18,15 @@ class GPTModel(nn.Module):
 
         # Create the transformer layers based on the configuration
         self.trf_blocks = nn.ModuleList([
-            TransformerBlock(config["emb_dim"], config["n_heads"], config["hidden_dim"], config["dropout_prob"], config["qkv_bias"])
+            TransformerBlock(config["emb_dim"], config["n_heads"], config["hidden_dim"], config["dropout_prob"])
             for _ in range(config["n_layers"])
         ])
 
         # Final layer normalization
-        self.final_norm = nn.LayerNorm(config["emb_dim"])
+        self.final_norm = LayerNorm(config["emb_dim"])
 
         # Output projection layer: 
         self.out_head = nn.Linear(config["emb_dim"], config["vocab_size"], bias = False)
-
-    def load_hf_gpt2_weights(self, hf_model):
-        """Copy the weights from a Hugging Face GPT-2 checkpoint into this custom GPT model."""
-        sd_hf = hf_model.state_dict()
-        sd_custom = self.state_dict()
-        transpose_keys = {
-            "trf_blocks.0.attn.in_proj_weight",
-            "trf_blocks.0.attn.out_proj.weight",
-            "trf_blocks.0.ffn.net.0.weight",
-            "trf_blocks.0.ffn.net.2.weight",
-        }
-
-        for layer_idx in range(len(self.trf_blocks)):
-            prefix = f"trf_blocks.{layer_idx}"
-            transpose_keys.update({
-                f"{prefix}.attn.in_proj_weight",
-                f"{prefix}.attn.out_proj.weight",
-                f"{prefix}.ffn.net.0.weight",
-                f"{prefix}.ffn.net.2.weight",
-            })
-
-        mapping = {
-            "tok_emb.weight": "transformer.wte.weight",
-            "pos_emb.weight": "transformer.wpe.weight",
-            "final_norm.weight": "transformer.ln_f.weight",
-            "final_norm.bias": "transformer.ln_f.bias",
-            "out_head.weight": "lm_head.weight",
-        }
-
-        for layer_idx in range(len(self.trf_blocks)):
-            layer_prefix = f"trf_blocks.{layer_idx}"
-            layering = {
-                f"{layer_prefix}.norm1.weight": f"transformer.h.{layer_idx}.ln_1.weight",
-                f"{layer_prefix}.norm1.bias": f"transformer.h.{layer_idx}.ln_1.bias",
-                f"{layer_prefix}.attn.in_proj_weight": f"transformer.h.{layer_idx}.attn.c_attn.weight",
-                f"{layer_prefix}.attn.in_proj_bias": f"transformer.h.{layer_idx}.attn.c_attn.bias",
-                f"{layer_prefix}.attn.out_proj.weight": f"transformer.h.{layer_idx}.attn.c_proj.weight",
-                f"{layer_prefix}.attn.out_proj.bias": f"transformer.h.{layer_idx}.attn.c_proj.bias",
-                f"{layer_prefix}.norm2.weight": f"transformer.h.{layer_idx}.ln_2.weight",
-                f"{layer_prefix}.norm2.bias": f"transformer.h.{layer_idx}.ln_2.bias",
-                f"{layer_prefix}.ffn.net.0.weight": f"transformer.h.{layer_idx}.mlp.c_fc.weight",
-                f"{layer_prefix}.ffn.net.0.bias": f"transformer.h.{layer_idx}.mlp.c_fc.bias",
-                f"{layer_prefix}.ffn.net.2.weight": f"transformer.h.{layer_idx}.mlp.c_proj.weight",
-                f"{layer_prefix}.ffn.net.2.bias": f"transformer.h.{layer_idx}.mlp.c_proj.bias",
-            }
-            mapping.update(layering)
-
-        with torch.no_grad():
-            for custom_key, hf_key in mapping.items():
-                if custom_key not in sd_custom or hf_key not in sd_hf:
-                    continue
-                value = sd_hf[hf_key]
-                if custom_key in transpose_keys:
-                    value = value.t()
-                sd_custom[custom_key].copy_(value)
-
-        return self
 
     def forward(self, x, causal_attn_mask=None):
         """

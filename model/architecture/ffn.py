@@ -11,11 +11,11 @@ class FeedForwardLayer(nn.Module):
             hidden_dim (int): Dimension of the hidden layer.
         """
         super().__init__()
-        self.net = nn.Sequential(
+        self.layers = nn.Sequential(
             nn.Linear(emb_dim, hidden_dim),
             nn.GELU(),
             nn.Linear(hidden_dim, emb_dim),
         )
 
     def forward(self, x):
-        return self.net(x)
+        return self.layers(x)
