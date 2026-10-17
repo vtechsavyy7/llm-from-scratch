@@ -2,7 +2,7 @@ from torch import nn
 import torch
 
 from .ffn import FeedForwardLayer
-from .multihead_self_attention import MultiHeadSelfAttention
+from .multihead_attention import MultiHeadAttention
 from .layer_norm import LayerNorm
 
 class TransformerBlock(nn.Module):
@@ -22,38 +22,40 @@ class TransformerBlock(nn.Module):
 
         super().__init__()
         self.norm1 = LayerNorm(emb_dim)
-        self.att = MultiHeadSelfAttention(emb_dim, num_heads, dropout_prob)
+        self.att = MultiHeadAttention(emb_dim, num_heads, dropout_prob)
         self.dropout1 = nn.Dropout(dropout_prob)
         self.norm2 = LayerNorm(emb_dim)
         self.ff = FeedForwardLayer(emb_dim, hidden_dim)
         self.dropout2 = nn.Dropout(dropout_prob)
 
-    def forward(self, x: torch.Tensor, causal_attn_mask: torch.Tensor):
+    def forward(self, query: torch.Tensor, attn_mask: torch.Tensor = None, use_kv_cache: bool = False):
         """
         Forward pass for the Transformer block.
 
         Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, emb_dim).
-            causal_attn_mask (torch.Tensor): Causal attention mask of shape (seq_len, seq_len)
+            query (torch.Tensor): Input query tensor of shape (batch_size, seq_len, emb_dim).
+            attn_mask (torch.Tensor): Attention mask of shape (query_len, key_len)
                                       Elements with value True indicate positions that should be masked.
+            use_kv_cache (bool): Whether to use the key-value cache for faster decoding during inference.
         Returns:
             torch.Tensor: Output tensor of the same shape as the input.
         """
         # Pre-LayerNorm for the attention sub-layer
-        normed_x = self.norm1(x)
+        normed_query = self.norm1(query)
         attn_output = self.att(
-            normed_x,
-            normed_x,
-            normed_x,
-            attn_mask=causal_attn_mask,
+            normed_query,
+            normed_query,
+            normed_query,
+            attn_mask=attn_mask,
+            use_kv_cache=use_kv_cache
         )
         # Apply dropout and add the residual connection for the attention sub-layer
-        x = x + self.dropout1(attn_output)
+        query = query + self.dropout1(attn_output)
 
         # Pre-LayerNorm for the feed-forward sub-layer
-        normed_x = self.norm2(x)
-        ffn_output = self.ff(normed_x)
+        normed_query = self.norm2(query)
+        ffn_output = self.ff(normed_query)
         # Apply dropout and add the residual connection for the feed-forward sub-layer
-        x = x + self.dropout2(ffn_output)
+        query = query + self.dropout2(ffn_output)
 
-        return x
+        return query
