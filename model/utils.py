@@ -33,7 +33,10 @@ def generate_sequence_with_temperature_and_top_k(model: nn.Module, start_prompt,
 
             # Create the causal attention mask for the current sequence length if needed
             seq_len = input_ids.size(1)
-            causal_attn_mask = torch.tril(torch.ones(seq_len, seq_len, device=device)).unsqueeze(0)  # [1, seq_len, seq_len]
+            causal_attn_mask = torch.triu(
+                                    torch.ones(seq_len, seq_len, dtype=torch.bool, device=device),
+                                    diagonal=1,
+                                ).unsqueeze(0) # [1, seq_len, seq_len]
 
             outputs = model(input_ids, causal_attn_mask=causal_attn_mask)   # [batch_size, sequence_length, vocab_size]
 
