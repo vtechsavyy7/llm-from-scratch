@@ -41,12 +41,19 @@ class TransformerBlock(nn.Module):
         """
         # Pre-LayerNorm for the attention sub-layer
         normed_x = self.norm1(x)
-        attn_output = self.att(normed_x, attn_mask=causal_attn_mask)
+        attn_output = self.att(
+            normed_x,
+            normed_x,
+            normed_x,
+            attn_mask=causal_attn_mask,
+        )
+        # Apply dropout and add the residual connection for the attention sub-layer
         x = x + self.dropout1(attn_output)
 
         # Pre-LayerNorm for the feed-forward sub-layer
         normed_x = self.norm2(x)
         ffn_output = self.ff(normed_x)
+        # Apply dropout and add the residual connection for the feed-forward sub-layer
         x = x + self.dropout2(ffn_output)
 
         return x
